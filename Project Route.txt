@@ -1,0 +1,4 @@
+Follow up of Project :
+1.First we selected our data set , used bigQuery in order to have a subset of data in CSV format.
+2.Secondly we have to write the python script file for tokenization / cleaning of data into a clear .txt file with a specified format on which C++ can work very easily.
+3.Then we will write the lexicon generator code in cp
