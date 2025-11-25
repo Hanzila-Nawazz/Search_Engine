@@ -3,6 +3,45 @@ import re
 
 WORDS_TO_REMOVE = set(["the", "of", "and", "a", "to", "in", "is", "you", "that", "it", "he", "was", "for", "on","are", "as", "with", "his", "they", "at", "be", "this", "have", "from", "or", "one", "had", "by", "word", "but", "not", "what", "all", "were", "we", "when", "your", "can", "said", "there", "use", "an", "each", "which", "she", "do", "how", "their", "if"])
 #So we have created a list of words that are the supporting words and we dont actaully need them in our lexicon dictionary 
+
+#Added a further improvement to distinguish between the similar terms ending with different suffixes yet having the same meaning in the context
+
+def simplify_word(word):
+    if len(word) < 4:
+        return word
+
+    if word.endswith("ational"): return word[:-7] + "ate"  # relational -> relate
+    if word.endswith("tional"):  return word[:-6] + "tion" # conditional -> condition
+    if word.endswith("ization"): return word[:-7] + "ize"  # optimization -> optimize
+    if word.endswith("bility"):  return word[:-6] + "ble"  # capability -> capable
+
+    if word.endswith("ment"): return word[:-4]  # adjustment -> adjust
+    if word.endswith("ness"): return word[:-4]  # darkness -> dark
+    if word.endswith("able"): return word[:-4]  # adjustable -> adjust
+    if word.endswith("ible"): return word[:-4]  # flexible -> flex
+    if word.endswith("less"): return word[:-4]  # wireless -> wire
+    if word.endswith("ship"): return word[:-4]  # friendship -> friend
+
+    if word.endswith("ing"): return word[:-3]   # running -> run
+    if word.endswith("ion"): return word[:-3]   # connection -> connect
+    if word.endswith("ive"): return word[:-3]   # active -> act
+    if word.endswith("ous"): return word[:-3]   # continuous -> continu
+    if word.endswith("ful"): return word[:-3]   # helpful -> help
+    if word.endswith("ize"): return word[:-3]   # modernize -> modern
+    if word.endswith("ate"): return word[:-3]   # activate -> activ
+    if word.endswith("iti"): return word[:-3]   # activity -> activ
+
+    # We require length > 5 here to be safe (don't turn "real" into "re")
+    if word.endswith("al") and len(word) > 5: return word[:-2]  # electrical -> electric
+    if word.endswith("er") and len(word) > 5: return word[:-2]  # driver -> driv
+    if word.endswith("or") and len(word) > 5: return word[:-2]  # creator -> creat
+    if word.endswith("ly"): return word[:-2]                    # quickly -> quick
+    if word.endswith("ed"): return word[:-2]                    # worked -> work
+
+    if word.endswith("s") and not word.endswith("ss") and len(word) > 3:
+        return word[:-1]
+    return word
+
 def clean_and_tokenize_text(text):
     text = text.lower() #We make all the text in the lower case to have a consistent dictionary and no case difference affects our search results and lexcion generation.
     text = re.sub(r'[^a-z0-9]', ' ' , text) #This line is written and is very cruical.This line uses the regular expressions library and with help of them we are excluding evry charcater other than alphabets and digits and sub function does the task of replacing the charactrs other than alphabets and numbers with the empty strings.
@@ -10,8 +49,9 @@ def clean_and_tokenize_text(text):
     tokens = text.split() #Here text is splitted based upon the spaces and is stored in a list named tokens. But this token still can have additional helping words which we need to remove to further clean our lexicon dictionary.
     filtered_tokens = [] #Creating a list of filtered tokens
     for word in tokens: #individually checking tokens in the list and only taking those which are not in the list and have length > 1 so only meaningful words are added in our final lexicon.
-        if(word not in WORDS_TO_REMOVE) and (len(word) > 1):
-            filtered_tokens.append(word)
+        if((word not in WORDS_TO_REMOVE) and (len(word) > 1) and (not word.isdigit())):
+            processed_word = simplify_word(word)
+            filtered_tokens.append(processed_word)
     return filtered_tokens
 
 
@@ -37,7 +77,7 @@ def lexicon_generator():
     for token_list_of_each_patent in dataframe['tokens']:
         lexicon.update(token_list_of_each_patent) #We have used the update function rather than add because we are throwing a list of words against each patent.
 
-    print("Total unique words in lexicon : len{lexicon}\n")
+    print(f"Total unique words in lexicon : {len(lexicon)}\n")
     #Ok , so we could have done it inside the tokenizer but we preffered to do here because we can later use that function in our frequency check without eliminating our duplicate words which is helpful in page ranking.
 
     print("Sorting the lexicon list in the alphabetical order for better indexing................\n")
