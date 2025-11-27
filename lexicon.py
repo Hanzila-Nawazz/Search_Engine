@@ -1,6 +1,6 @@
 import pandas as pd 
 import re
-
+# Haseem in the house
 WORDS_TO_REMOVE = set(["the", "of", "and", "a", "to", "in", "is", "you", "that", "it", "he", "was", "for", "on","are", "as", "with", "his", "they", "at", "be", "this", "have", "from", "or", "one", "had", "by", "word", "but", "not", "what", "all", "were", "we", "when", "your", "can", "said", "there", "use", "an", "each", "which", "she", "do", "how", "their", "if"])
 #So we have created a list of words that are the supporting words and we dont actaully need them in our lexicon dictionary 
 
