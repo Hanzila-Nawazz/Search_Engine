@@ -2,6 +2,7 @@ import pandas as pd
 import re
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
+from collections import Counter
 import gc
 import os
 
@@ -35,8 +36,9 @@ def lexicon_generator():
     #(the reason for taking that large dataset in our case was that we had a dataset having all the core keywords and definition in our title and abstract only. The description would only increase the lookup time and would not significantly contribute to the lexicon because they are more like numerical having details about the patents ownership , dimensions , numerical and methamatical formulae).
     CHUNK_SIZE = 10000
 
-    #Defining a set for lexicon to store data in it from our ram and after that dumping the data from the ram.
-    lexicon = set()
+    #Defining a list to temporarily handle the tokens so calculate their frequency and discarding the words having a frequency of 1 since most of them are NOISE so we want to remove them.
+    all_tokens = []
+
     csv_file_path = "data/patents_dataset.csv"
 
     #Error handling if the file path casues error in global case.
@@ -63,11 +65,11 @@ def lexicon_generator():
     
             #Storing the tokens in the vector of each patent 
             for token_list_of_each_patent in chunk_dataframe['tokens']:
-                lexicon.update(token_list_of_each_patent)
+                all_tokens.extend(token_list_of_each_patent)
             
             #Maintainig the counter
             total_processed += len(chunk_dataframe)
-            print(f"Processing chunk number :  {chunk+1} (Toal Documents : {total_processed})")
+            print(f"Processing chunk number :  {chunk+1} (Toal Documents Processed: {total_processed})")
 
             #Deleting the processed ones from the ram to reduce the ram consumption as much as possible.
             del chunk_dataframe
@@ -78,6 +80,12 @@ def lexicon_generator():
     except Exception as e:
         print("An error occured during processing the file!")
 
+    
+    #Creating a counter to count  the frequecy of each word 
+    word_frequency = Counter(all_tokens)
+
+    #Keeping only the words having frequency more than one 
+    lexicon = set([word for word, freq in word_frequency.items() if freq > 1])
 
     print(f"Total unique words in lexicon : {len(lexicon)}")
     print("Sorting the lexicon list in the alphabetical order for better indexing...")
