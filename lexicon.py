@@ -111,4 +111,5 @@ def lexicon_generator():
             
     print("Lexicon file has been successfully generated.")
 
-lexicon_generator()
+if __name__ == "__main__":
+    lexicon_generator()
