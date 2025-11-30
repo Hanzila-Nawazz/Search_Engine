@@ -5,6 +5,7 @@ from nltk.stem import WordNetLemmatizer
 from collections import Counter
 import gc
 import os
+import traceback
 
 #Importing the defined basic supportive words of english language to not include them in the lexicon using nltk library and also creating an object lemmatizer. Lemmatizer is also a predefined library part of nltk which looks for the adverbs to convert to basic verbs making them root words by using english dictionary. 
 stop_words = set(stopwords.words('english'))  
@@ -19,8 +20,12 @@ def clean_and_tokenize_text(text):
     filtered_tokens = [] 
     for token in tokens: 
         if((token not in stop_words) and (len(token) > 2) and (not token.isdigit()) and (not re.fullmatch(r'(.)\1{2,}' , token))):
-            processed_word = lemmatizer.lemmatize(token)
-            processed_word = lemmatizer.lemmatize(processed_word , pos= 'v')
+            try:
+                processed_word = lemmatizer.lemmatize(token)
+                processed_word = lemmatizer.lemmatize(processed_word , pos= 'v')
+            except Exception:
+                # Any error from NLTK (missing data or corrupted files) -> fall back to raw token
+                processed_word = token
             filtered_tokens.append(processed_word)
     return filtered_tokens
 
@@ -39,7 +44,7 @@ def lexicon_generator():
     #Defining a list to temporarily handle the tokens so calculate their frequency and discarding the words having a frequency of 1 since most of them are NOISE so we want to remove them.
     all_tokens = []
 
-    csv_file_path = "data/patents_dataset.csv"
+    csv_file_path = "patents_dataset.csv"
 
     #Error handling if the file path casues error in global case.
     if not os.path.exists(csv_file_path):
@@ -55,7 +60,7 @@ def lexicon_generator():
     total_processed = 0
     try:
         #For loop handling multiple chunks of data to keep the program running.
-        for chunk , chunk_dataframe in enumerate(chunk_iterator):
+        for chunk_index, chunk_dataframe in enumerate(chunk_iterator):
             #Handling the empty data spots
             chunk_dataframe = chunk_dataframe.fillna("") 
             #Combining both the columns so we can simply perform functions on single strings per patent / file.
@@ -69,7 +74,7 @@ def lexicon_generator():
             
             #Maintainig the counter
             total_processed += len(chunk_dataframe)
-            print(f"Processing chunk number :  {chunk+1} (Toal Documents Processed: {total_processed})")
+            print(f"Processing chunk number :  {chunk_index+1} (Toal Documents Processed: {total_processed})")
 
             #Deleting the processed ones from the ram to reduce the ram consumption as much as possible.
             del chunk_dataframe
@@ -79,6 +84,8 @@ def lexicon_generator():
         print("User stopped the execution! Exiting!")
     except Exception as e:
         print("An error occured during processing the file!")
+        print(f"Exception: {e}")
+        traceback.print_exc()
 
     
     #Creating a counter to count  the frequecy of each word 
