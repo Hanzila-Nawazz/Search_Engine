@@ -56,7 +56,7 @@ def build_inverted_index():
         # Sort inverted index by word_id
         sorted_word_ids = sorted(inverted_index.keys())
 
-        # Write to file in your preferred format (txt)
+        # Write to file in txt
         with open("inverted_index.txt", "w", encoding="utf-8") as out:
             for word_id in sorted_word_ids:
                 postings = inverted_index[word_id]
