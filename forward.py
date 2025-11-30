@@ -4,7 +4,7 @@ import os
 import traceback
 from collections import Counter
 
-# Reuse your existing clean & tokenize function
+# Reusing our existing clean & tokenize function
 from lexicon import clean_and_tokenize_text
 
 
