@@ -4,7 +4,11 @@ import os
 def build_inverted_index():
     inverted_index = {}
 
-    
+    # Check if forward_index.txt exists
+    if not os.path.exists("forward_index.txt"):
+        print("Error: forward_index.txt not found. Please run Forward.py first.")
+        return
+
 
     try:
         with open("forward_index.txt", "r", encoding="utf-8") as f:
@@ -46,6 +50,10 @@ def build_inverted_index():
 
                     # append (pub_no, frequency)
                     inverted_index[word_id].append((pub_no, freq))
+                if(check == 10000):
+                    print(f"total {check_in_tens} processed.\n")
+                    check_in_tens = check_in_tens + 1
+                    check = 0
                 
 
         # Validate that we built a non-empty index
