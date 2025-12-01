@@ -51,7 +51,7 @@ def build_inverted_index():
                     # append (pub_no, frequency)
                     inverted_index[word_id].append((pub_no, freq))
                 if(check == 10000):
-                    print(f"total {check_in_tens} processed.\n")
+                    print(f"Total {check_in_tens} chunks processed.\n")
                     check_in_tens = check_in_tens + 1
                     check = 0
                 
