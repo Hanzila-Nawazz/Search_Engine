@@ -28,8 +28,8 @@ if not os.path.exists(OUTPUT_DIR):
 barrels = [[] for _ in range(NUM_BARRELS)]
 
 # Read the inverted file
-with open(INPUT_FILE, "r", encoding="utf-8") as f:
-    for line in f:
+with open(INPUT_FILE, "r", encoding="utf-8") as file:
+    for line in file:
         line = line.strip()
         if not line:
             continue  # skip empty lines
