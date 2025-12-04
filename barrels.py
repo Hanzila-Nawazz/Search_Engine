@@ -4,6 +4,11 @@
 # Reads inverted.txt and assigns each posting list to its corresponding barrel based on word ID. Each barrel is saved as a separate text file.
 # -----------------------------------------------
 
+# Usage:
+# python barrels.py
+# Make sure inverted.txt exists in the same directory.
+
+
 import os
 
 # Define the number of barrels 
