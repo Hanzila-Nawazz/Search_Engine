@@ -20,6 +20,9 @@ INPUT_FILE = "inverted.txt"
 # Directory to store barrels
 OUTPUT_DIR = "barrels"
 
+# Just a starting statement for clarity that the program has started 
+print("Starting barrel creation process...")
+
 # Create barrels directory if it doesn't exist
 if not os.path.exists(OUTPUT_DIR):
     os.makedirs(OUTPUT_DIR)
