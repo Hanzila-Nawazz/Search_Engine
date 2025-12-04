@@ -53,6 +53,7 @@ with open(INPUT_FILE, "r", encoding="utf-8") as file:
 
 # Write each barrel to a separate file
 for i in range(NUM_BARRELS):
+    print(f"Barrel {i} contains {len(barrels[i])} entries.") # debug print for barrel entry counts
     barrel_file = os.path.join(OUTPUT_DIR, f"barrel_{i}.txt")
     with open(barrel_file, "w", encoding="utf-8") as f:
         for entry in barrels[i]:
