@@ -16,7 +16,7 @@ import os # Importing os module to handle file and directory operations
 NUM_BARRELS = 10  # We can change NUM_BARRELS = 10 to another number if needed 
 
 # Path to the inverted index file
-INPUT_FILE = "inverted.txt" # This is the main inverted index containing wordID: postings 
+INPUT_FILE = "inverted_index.txt" # This is the main inverted index containing wordID: postings 
 
 # Directory to store barrels
 OUTPUT_DIR = "barrels" # Folder where each barrel file will be stored. Helps organize data and prevent clutter
@@ -35,7 +35,7 @@ barrels = [[] for _ in range(NUM_BARRELS)]
 # Check if inverted.txt exists
 # This prevents the program from crashing if the input file is missing and informs the user
 if not os.path.exists(INPUT_FILE):
-    print("Error: inverted.txt not found.")
+    print("Error: inverted_index.txt not found.")
     exit()
 
 # Read the inverted file line by line 
