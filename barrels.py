@@ -30,6 +30,11 @@ if not os.path.exists(OUTPUT_DIR):
 # Initialize empty lists for each barrel
 barrels = [[] for _ in range(NUM_BARRELS)]
 
+# Check if inverted.txt exists
+if not os.path.exists(INPUT_FILE):
+    print("Error: inverted.txt not found.")
+    exit()
+
 # Read the inverted file
 with open(INPUT_FILE, "r", encoding="utf-8") as file:
     for line in file:
