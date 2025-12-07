@@ -10,6 +10,15 @@
 
 
 import os # Importing os module to handle file and directory operations
+import psutil #Importing it to check the ram usage side-by-side to avoid crashing and testing the efficieny of the code
+
+def print_memory_usage():
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    # Convert bytes to MB to check the ram consumption during the process 
+    current_ram = mem_info.rss / (1024 * 1024) 
+    print(f"   [RAM Usage: {current_ram:.2f} MB]")
+
 
 # Define the number of barrels. We divide the inverted index into NUM_BARRELS smaller files (barrels) to make searches faster and reduce memory usage when handling large indexes:
 
@@ -38,6 +47,7 @@ if not os.path.exists(INPUT_FILE):
     print("Error: inverted_index.txt not found.")
     exit()
 
+line_count = 0
 # Read the inverted file line by line 
 # Each line represents a wordID and its postings
 with open(INPUT_FILE, "r", encoding="utf-8") as file:
@@ -61,6 +71,14 @@ with open(INPUT_FILE, "r", encoding="utf-8") as file:
         # Append the line to the correct barrel
         # This is a temporary in-memory storage before writing to disk
         barrels[barrel_index].append(line)  # Add the current line to the corresponding barrel 
+
+        #Updating line count every iteration and after every 5000 lines of the inverted index check the ram usage during the looping . We could have simply checked it in the last iteration where the usage is max but we wanted to check the efficiency throughout the program so we can debug (if any crash occurs) due to memeory
+
+        line_count+=1
+        #Having a safe check to avoid spamming in the terminal and checking it after every 5000 lines 
+        if line_count % 5000 == 0:
+            print(f"Processed {line_count} lines....")
+            print_memory_usage()
 
 # Write each barrel to a separate file
 # This converts our in-memory lists into actual text files for persistent storage
