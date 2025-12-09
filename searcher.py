@@ -27,14 +27,9 @@ class SearchEngine:
         print("Lexicon loaded successfully!")
         return lexicon_dictionary
     
-    def __get_word_id_from_lexicon(self , string):
-        tokens = clean_and_tokenize_text(string)
 
-        if len(tokens) != 1 : 
-            print("Single word queries allowed for searching the corresponding word id.")
-            return None 
-
-        word = tokens[0]
+    def __get_word_id_from_lexicon(self , word):
+        
         word_ID = self.lexicon.get(word)
 
         if word_ID is None:
@@ -42,28 +37,21 @@ class SearchEngine:
             return None 
         
         return word_ID
+    
+    def barrel_lookup(self , word_ID):
 
-
-    def single_word_search(self , string):
-        
         documet_frequency_map = {}
 
-        word_ID = self.__get_word_id_from_lexicon(string)
-
-        if word_ID is None:
-            return {}
-        
         barrel_ID = word_ID % 10
         barrel_filename = f"barrel_{barrel_ID}.txt"
         barrel_path = os.path.join("barrels" , barrel_filename)
 
         if not os.path.exists(barrel_path):
             print(f"Error : Barrel not found!")
-            return 
+            return {}
 
         current_word_id = -1
         found_target_block = False
-
 
         with open(barrel_path , "r" , encoding="utf-8") as file:
             for line in file:
@@ -110,18 +98,74 @@ class SearchEngine:
                             documet_frequency_map[document_ID] = frequency
                         except ValueError:
                             continue
+        
+        return documet_frequency_map
 
-        if documet_frequency_map:
-            print(f"Results returned from the barrels :  {len(documet_frequency_map)} documents returned!") 
-            return documet_frequency_map
+    def single_word_search(self , tokens):
+        
+        word = tokens[0]
+        word_ID = self.__get_word_id_from_lexicon(word)
+
+        if word_ID is None:
+            return {}
+        
+        document_frequency_map = self.barrel_lookup(word_ID)
+
+        if document_frequency_map:
+            print(f"Results returned from the barrels :  {len(document_frequency_map)} documents returned!") 
+            return document_frequency_map
         else:
             print(f"Word found in lexicon but no documents in the barrel.") 
             return {}
+    
 
-                        
+    def multiple_word_search(self , tokens):
+
+        dictionary_list = []
+        for token in tokens :
+            word_ID = self.__get_word_id_from_lexicon(token)
+            resultant_dictionary = self.barrel_lookup(word_ID)
+
+            if not resultant_dictionary:
+                print(f"No document contains the word : {token}")
+                return {}
+            
+            dictionary_list.append(resultant_dictionary)
+        
+        common_documents = set(dictionary_list[0].keys())
+
+        for dictionary in dictionary_list[1:]:
+            common_documents = common_documents.intersection(dictionary.keys())
+
+            if not common_documents:
+                print(f"No results found against the query.")
+                return {}
+            
+        document_frequency_map = {}
+
+        for doc_ID in common_documents:
+            total_frequency = 0
+            for dictionary in dictionary_list:
+                total_frequency += dictionary.get(doc_ID , 0)
+            document_frequency_map[doc_ID] = total_frequency
+
+        print(f"Multiple word search function returned {len(document_frequency_map)} documents.")
+        return document_frequency_map
+
+
+    def search(self , string):
+        tokens = clean_and_tokenize_text(string)
+        if len(tokens) == 1 :
+            dic = self.single_word_search(tokens)
+            print(dic)
+        else:
+            dic = self.multiple_word_search(tokens)
+            print(dic)
+
+
 instance1 = SearchEngine()
 while(True) : 
-    string = input("Enter the single word you want to search for and enter no if exit: ")
+    string = input("Enter something to search: ")
     if string == "exit":
         break
-    instance1.single_word_search(string)
+    instance1.search(string)
