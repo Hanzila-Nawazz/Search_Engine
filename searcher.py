@@ -1,9 +1,14 @@
 from lexicon import clean_and_tokenize_text
+import gensim
+import traceback
 import os
 class SearchEngine:
     def __init__(self):
         print("Making the engine ready for query...")
+        print("Loading lexicon...")
         self.lexicon = self.__load_lexicon()
+        print("Loading the semantic model...")
+        self.model = self.__load_semantic_model()
         print("Search Engine is Ready! Enter your query")
     
     def __load_lexicon(self):
@@ -27,6 +32,17 @@ class SearchEngine:
         print("Lexicon loaded successfully!")
         return lexicon_dictionary
     
+
+    def __load_semantic_model(self):
+        MODEL_PATH = "word2vec-google-patents-dataset.model"
+
+        if not os.path.exists(MODEL_PATH):
+            print(f"Caution! The model not found. Only query-words based results would be returned!")
+            return None
+        else:
+            print("Smeantic Model loaded successfully!")
+            return gensim.models.Word2Vec.load(MODEL_PATH)
+        
 
     def __get_word_id_from_lexicon(self , word):
         
@@ -100,72 +116,112 @@ class SearchEngine:
                             continue
         
         return documet_frequency_map
-
-    def single_word_search(self , tokens):
-        
-        word = tokens[0]
-        word_ID = self.__get_word_id_from_lexicon(word)
-
-        if word_ID is None:
-            return {}
-        
-        document_frequency_map = self.barrel_lookup(word_ID)
-
-        if document_frequency_map:
-            print(f"Results returned from the barrels :  {len(document_frequency_map)} documents returned!") 
-            return document_frequency_map
-        else:
-            print(f"Word found in lexicon but no documents in the barrel.") 
-            return {}
     
+    def expand_query_with_semantics(self , word):
+        if not self.model : return []
 
-    def multiple_word_search(self , tokens):
+        try:
+            raw_suggestions = self.model.wv.most_similar(word , topn=10)
+            valid_suggestions = []
 
-        dictionary_list = []
-        for token in tokens :
-            word_ID = self.__get_word_id_from_lexicon(token)
-            resultant_dictionary = self.barrel_lookup(word_ID)
+            for suggestion , score in raw_suggestions:
+                if suggestion in self.lexicon:
+                    valid_suggestions.append((suggestion , score))
 
-            if not resultant_dictionary:
-                print(f"No document contains the word : {token}")
-                return {}
             
-            dictionary_list.append(resultant_dictionary)
+            return valid_suggestions[:3]
+        except KeyError:
+            return []
         
-        common_documents = set(dictionary_list[0].keys())
+    
+    def normal_scores_scale_of_100(self , raw_scores):
+        if not raw_scores : return []
 
-        for dictionary in dictionary_list[1:]:
-            common_documents = common_documents.intersection(dictionary.keys())
+        max_score = max(raw_scores.values())
+        if max_score == 0: return []
 
-            if not common_documents:
-                print(f"No results found against the query.")
-                return {}
+        final_scores = []
+
+        for document_id , scores in raw_scores.items():
+
+            percentage = (scores/max_score) * 100
+
+            if percentage > 10:
+                final_scores.append((document_id , percentage))
+
+        
+        final_scores.sort(key=lambda x : x[1] , reverse=True)
+
+        return final_scores
+
+
+
+    def ranked_search(self , tokens):
+        final_scores = {}
+
+        EXACT_WEIGHT = 1.0
+        SUGGESTIONS_WEIGHT = 0.4
+
+        for token in tokens:
+            word_ID = self.__get_word_id_from_lexicon(token)
+            if word_ID is not None:
+                exact_matched_documents = self.barrel_lookup(word_ID)
+
+                for document_id , frequency in exact_matched_documents.items():
+
+                    if document_id not in final_scores:
+                        final_scores[document_id] = 0.0
+
+                    final_scores[document_id] += (int(frequency) * EXACT_WEIGHT)
+
             
-        document_frequency_map = {}
+            suggestions = self.expand_query_with_semantics(token)
 
-        for doc_ID in common_documents:
-            total_frequency = 0
-            for dictionary in dictionary_list:
-                total_frequency += dictionary.get(doc_ID , 0)
-            document_frequency_map[doc_ID] = total_frequency
+            
+            for suggestion , score in suggestions:
+                suggestion_word_id = self.__get_word_id_from_lexicon(suggestion)
+                if suggestion_word_id is not None:
+                    suggestion_documents = self.barrel_lookup(suggestion_word_id)
 
-        print(f"Multiple word search function returned {len(document_frequency_map)} documents.")
-        return document_frequency_map
+                    for suggested_document_id , frequency in suggestion_documents.items():
+
+                        if suggested_document_id not in final_scores:
+                            final_scores[document_id] = 0.0
+
+                        final_scores[document_id] += (int(frequency) * score * SUGGESTIONS_WEIGHT)
+
+        return self.normal_scores_scale_of_100(final_scores)
 
 
-    def search(self , string):
+    def search(self, string):
         tokens = clean_and_tokenize_text(string)
-        if len(tokens) == 1 :
-            dic = self.single_word_search(tokens)
-            print(dic)
+
+        if not tokens:
+            print("Please enter a valid query.")
+            return
+        
+        ranked_documents = self.ranked_search(tokens)
+        
+        if not ranked_documents:
+            print("No matching documents found.")
+
         else:
-            dic = self.multiple_word_search(tokens)
-            print(dic)
+            print(f"Found {len(ranked_documents)} documents.")
+            print("-" * 40)
+            print(f"{'RANK':<5} | {'DOC ID':<15} | {'RELEVANCE'}")
+            print("-" * 40)
+            
+            for i, (document_id, score) in enumerate(ranked_documents[:10]):
+                print(f"#{i+1:<4} | {document_id:<15} | {score:.1f}%")
+            print("-" * 40)
 
 
-instance1 = SearchEngine()
-while(True) : 
-    string = input("Enter something to search: ")
-    if string == "exit":
-        break
-    instance1.search(string)
+if __name__ == "__main__":
+    instance1 = SearchEngine()
+    
+    while True:
+        query_string = input("Enter a string to search: ")
+        if query_string.lower() == "exit":
+            break
+        instance1.search(query_string)
+
