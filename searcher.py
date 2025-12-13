@@ -134,30 +134,10 @@ class SearchEngine:
             return []
         
     
-    def normal_scores_scale_of_100(self , raw_scores):
-        if not raw_scores : return []
-
-        max_score = max(raw_scores.values())
-        if max_score == 0: return []
-
-        final_scores = []
-
-        for document_id , scores in raw_scores.items():
-
-            percentage = (scores/max_score) * 100
-
-            if percentage > 10:
-                final_scores.append((document_id , percentage))
-
-        
-        final_scores.sort(key=lambda x : x[1] , reverse=True)
-
-        return final_scores
-
-
-
+    
     def ranked_search(self , tokens):
         final_scores = {}
+        document_token_matches = {}
 
         EXACT_WEIGHT = 1.0
         SUGGESTIONS_WEIGHT = 0.4
@@ -171,8 +151,10 @@ class SearchEngine:
 
                     if document_id not in final_scores:
                         final_scores[document_id] = 0.0
+                        document_token_matches[document_id] = set()
 
                     final_scores[document_id] += (int(frequency) * EXACT_WEIGHT)
+                    document_token_matches[document_id].add(token)
 
             
             suggestions = self.expand_query_with_semantics(token)
@@ -186,11 +168,32 @@ class SearchEngine:
                     for suggested_document_id , frequency in suggestion_documents.items():
 
                         if suggested_document_id not in final_scores:
-                            final_scores[document_id] = 0.0
+                            final_scores[suggested_document_id] = 0.0
+                            document_token_matches[suggested_document_id] = set()
 
-                        final_scores[document_id] += (int(frequency) * score * SUGGESTIONS_WEIGHT)
+                        final_scores[suggested_document_id] += (int(frequency) * score * SUGGESTIONS_WEIGHT)
+                        document_token_matches[suggested_document_id].add(token)
 
-        return self.normal_scores_scale_of_100(final_scores)
+
+        ranking_data = []
+        for document_id , score in final_scores.items():
+            words_matched = len(document_token_matches[document_id])
+            ranking_data.append((document_id , words_matched , score))
+
+        ranking_data.sort(key= lambda x: (x[1] , x[2]) , reverse=True)
+
+        final_results = []
+
+        if ranking_data:
+            max_score = ranking_data[0][2]
+
+            if max_score == 0 : max_score = 1
+
+            for document_id ,_ ,  score in ranking_data:
+                percentage = (score/max_score) * 100
+                final_results.append((document_id , percentage))
+
+        return final_results
 
 
     def search(self, string):
