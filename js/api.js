@@ -1,57 +1,55 @@
 /**
  * api.js
  * Handles communication with the backend.
- * Currently mocks data until backend API is ready.
  */
 
-const API_BASE_URL = 'http://localhost:5000/api'; // Placeholder
+// USE A RELATIVE PATH so it works regardless of how you access localhost
+const API_BASE_URL = '/api'; 
+
+async function _fetchJson(url, opts) {
+    try {
+        const res = await fetch(url, opts);
+        if (!res.ok) {
+            const text = await res.text();
+            let errData;
+            try { errData = JSON.parse(text); } catch(e) { errData = text; }
+            return { error: errData || `Status: ${res.status}`, isError: true };
+        }
+        return await res.json();
+    } catch (err) {
+        console.error("Fetch error:", err);
+        return { error: "Could not connect to server", isError: true };
+    }
+}
 
 export const API = {
-    /**
-     * Fetch system statistics (doc count, lexicon size, etc.)
-     */
-    async getStats() {
-        // Mock delay
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        return {
-            documents: 45892,
-            lexiconSize: 128456,
-            indexedTerms: 892341,
-            avgDocLength: 2847
-        };
+    async health() {
+        return _fetchJson(`${API_BASE_URL}/health`);
     },
 
-    /**
-     * Search for documents given a query string.
-     * @param {string} query 
-     */
+    async getStats() {
+        return _fetchJson(`${API_BASE_URL}/stats`);
+    },
+
     async search(query) {
-        // Mock delay
-        await new Promise(resolve => setTimeout(resolve, 800));
-
         if (!query) return [];
+        const encoded = encodeURIComponent(query);
+        return _fetchJson(`${API_BASE_URL}/search?q=${encoded}`);
+    },
 
-        // Mock results based on query
-        return [
-            {
-                id: 'doc_12345',
-                title: 'Introduction to Data Structures',
-                snippet: '...efficient storage and retrieval of data is crucial for <b>' + query + '</b> performance...',
-                score: 98.5
-            },
-            {
-                id: 'doc_67890',
-                title: 'Advanced Algorithms: Graph Theory',
-                snippet: '...optimizing search paths using Dijkstra methods related to <b>' + query + '</b>...',
-                score: 85.2
-            },
-            {
-                id: 'doc_54321',
-                title: 'System Design Patterns',
-                snippet: '...scalability considerations for <b>' + query + '</b> based microservices...',
-                score: 76.0
-            }
-        ];
+    async autocomplete(prefix) {
+        if (!prefix) return [];
+        const encoded = encodeURIComponent(prefix);
+        const data = await _fetchJson(`${API_BASE_URL}/autocomplete?q=${encoded}`);
+        // Ensure we always return an array to avoid .forEach crashes
+        return Array.isArray(data) ? data : [];
+    },
+
+    async addDocument(doc) {
+        return _fetchJson(`${API_BASE_URL}/documents`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(doc)
+        });
     }
 };
