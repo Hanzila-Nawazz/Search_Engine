@@ -9,11 +9,23 @@ import os
 from autoComplete import AutoCompleteSystem
 
 import msvcrt 
+#Threading imported for document addition to be done without search function to be halted
+import threading
+import csv
+
 
 class SearchEngine:
     #The initializer which runs automatically when the instance of the object is created. Inside this we are loading our lexicon and our semantic model in our RAM for faster access and results.
     def __init__(self):
         print("Making the engine ready for query...")
+
+        #Threading lock used because we would be having two threads running when document added the user upload thread and the background flush means writing from ram to hard disk so threading lock prevent one to interfere with other 
+        self.lock = threading.Lock()
+        #When new document added keeping it in ram fro including in search results 
+        self.dynamic_index = {}
+        self.flushing_index = {}
+        self.max_word_id = 0 
+
         print("Loading lexicon...")
         self.lexicon = self.__load_lexicon()
         print("Loading the semantic model...")
@@ -41,6 +53,10 @@ class SearchEngine:
                     word_id_string = parts[0]
                     word = parts[1]
                     lexicon_dictionary[word] = int(word_id_string)
+
+                    if int(word_id_string) > self.max_word_id:
+                        self.max_word_id = int(word_id_string) 
+
         print("Lexicon loaded successfully!")
         return lexicon_dictionary
     
@@ -68,6 +84,72 @@ class SearchEngine:
         
         return word_ID
     
+
+    def add_document(self , document_id , title , abstract , filing_date = "Not Available", publication_date = "Not Available" , cpc_codes = "Unassigned", ipc_codes = "Unassigned" , inventors = "Unknown", asisgnees = "Unknown"):
+
+        try:
+            with open("patents_dataset.csv" , 'a' , newline='' , encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow([document_id , title , abstract , filing_date , publication_date , cpc_codes , ipc_codes , inventors , asisgnees])
+
+                file_content = (
+                f"[PUBLICATION_NUMBER]\n{document_id}\n\n"
+                f"[TITLE]\n{title}\n\n"
+                f"[ABSTRACT]\n{abstract}\n\n"
+                f"[FILING_DATE]\n{filing_date}\n\n"
+                f"[PUBLICATION_DATE]\n{publication_date}\n\n"
+                f"[CPC_CODES]\n{cpc_codes}\n\n"
+                f"[IPC_CODES]\n{ipc_codes}\n\n"
+                f"[INVENTORS]\n{inventors}\n\n"
+                f"[ASSIGNEES]\n{asisgnees}\n\n"
+                )
+
+
+                txt_path = os.path.join("patent_docs" , f"{document_id}.txt")
+                with open(txt_path , 'w' , encoding='utf-8') as f:
+                    f.write(file_content)
+
+        except Exception as e:
+            print(f"Error writing to disk: {e}")
+            return False
+        
+        
+        with self.lock: 
+            
+
+            full_text = f"{title} {abstract}"
+            tokens = clean_and_tokenize_text(full_text)
+            
+            
+            word_frequencies = {}
+            for token in tokens:
+                word_frequencies[token] = word_frequencies.get(token, 0) + 1
+
+            
+            for word, freq in word_frequencies.items():
+                if word not in self.lexicon:
+                    self.max_word_id += 1
+                    self.lexicon[word] = self.max_word_id
+                
+                word_id = self.lexicon[word]
+
+                if word_id not in self.dynamic_index:
+                    self.dynamic_index[word_id] = {}
+                
+                self.dynamic_index[word_id][document_id] = freq
+
+        
+        PENDING_LIMIT = 50
+        if len(self.dynamic_index) >= PENDING_LIMIT:
+            print("RAM buffer full. Flushing to disk in background...")
+            flush_thread = threading.Thread(target=self.save_state_to_disk)
+            flush_thread.start()
+
+        print(f"Document {document_id} indexed successfully!")
+        return True
+    
+
+    
     #This is the cruical function for our search logic. Based on the word ID we first check for the specific barrel by checking the range of the wordID. Then simply go to that barrel and return the document conatining that word alongwith their frequencies in the documents.
     def barrel_lookup(self , word_ID):
         #The function originally returns a dictionary for a specific word containing the document name mapped against the frequency of that word in that document.
@@ -81,81 +163,95 @@ class SearchEngine:
         barrel_path = os.path.join("barrels" , barrel_filename)
 
         #Existance check for the barrel file if not found simply return an empty dictionary
-        if not os.path.exists(barrel_path):
-            print(f"Error : Barrel not found!")
-            return {}
+        if os.path.exists(barrel_path): 
         
-        #Since barrel file is too large we want to go through the specific word ID and all the documents against it. We set current word id to -1 and create a boolean found target block false which we will set to true after finding the specific block. We do not want to add the unrelated results in the final results. Since each block can be multi lined and we can only iterate through the document line by line so in order to have a single block to store the documents we ar doing all this logic.
-        current_word_id = -1
-        found_target_block = False
+            #Since barrel file is too large we want to go through the specific word ID and all the documents against it. We set current word id to -1 and create a boolean found target block false which we will set to true after finding the specific block. We do not want to add the unrelated results in the final results. Since each block can be multi lined and we can only iterate through the document line by line so in order to have a single block to store the documents we ar doing all this logic.
+            current_word_id = -1
+            found_target_block = False
 
-        #We open that specific barrel file 
-        with open(barrel_path , "r" , encoding="utf-8") as file:
-            #Iterate line by line for valid line
-            for line in file:
-                line = line.strip()
-                if not line :
-                    continue
-
-                #Split the line into two parts based on the separator ':' which would only exist in the first line of the block in this way we would indentify the start of the block and when again another line would come like this we would know new block has been started and we would simply break through the loop
-                parts = line.split(" : " , 1)
-                string_to_parse = ""
-
-                #If length of the parts is two which means line divided successfully it means it indicates start of the block and the first part starts with digit which means the word ID 
-                if len(parts) == 2 and parts[0].isdigit():
-                    #We store the first part in the current word id variable and when this variable changes we exit from the loop
-                    current_word_id = int(parts[0])
-                    #String to parse is the second part which contains all the documents of that specific word.
-                    string_to_parse = parts[1]
-
-                    #If target block is already found and the current word id does not matches the word_ID we are looking for it means we have encountreed the next block so we simply exit from the loop.
-                    if found_target_block and current_word_id != word_ID:
-                        break
-
-                    #And this logic keeps a check wether the block found or not and if found set to true so that we can break from the loop rather than keep iterating over the barrel.
-                    if current_word_id == word_ID:
-                        found_target_block = True
-                
-                #If its the continuation line not the first line of the block and found target block is set to true so we pass the entire line to be parsed since it would contain all the documents related to that word.
-                else:
-                    if found_target_block:
-                        string_to_parse = line
-                    else:
+            #We open that specific barrel file 
+            with open(barrel_path , "r" , encoding="utf-8") as file:
+                #Iterate line by line for valid line
+                for line in file:
+                    line = line.strip()
+                    if not line :
                         continue
-                
-                #Here we added another safety check so that we make sure the word id in the current iteration matches our required word id
-                if current_word_id == word_ID: 
-                    #Take the indiviual docuemnts in the line which are separated with columns . Name them as entries because each entry contains both the document name and the frequency against that. We also need to separate the frequency for page rank logic afterwards.
-                    entries = [e.strip() for e in string_to_parse.split(",")] 
 
-                    #Iterate over the entries remove extra spaces 
-                    for entry in entries:
-                        entry = entry.strip()
-                        if not entry : 
+                    #Split the line into two parts based on the separator ':' which would only exist in the first line of the block in this way we would indentify the start of the block and when again another line would come like this we would know new block has been started and we would simply break through the loop
+                    parts = line.split(" : " , 1)
+                    string_to_parse = ""
+
+                    #If length of the parts is two which means line divided successfully it means it indicates start of the block and the first part starts with digit which means the word ID 
+                    if len(parts) == 2 and parts[0].isdigit():
+                        #We store the first part in the current word id variable and when this variable changes we exit from the loop
+                        current_word_id = int(parts[0])
+                        #String to parse is the second part which contains all the documents of that specific word.
+                        string_to_parse = parts[1]
+
+                        #If target block is already found and the current word id does not matches the word_ID we are looking for it means we have encountreed the next block so we simply exit from the loop.
+                        if found_target_block and current_word_id != word_ID:
+                            break
+
+                        #And this logic keeps a check wether the block found or not and if found set to true so that we can break from the loop rather than keep iterating over the barrel.
+                        if current_word_id == word_ID:
+                            found_target_block = True
+                    
+                    #If its the continuation line not the first line of the block and found target block is set to true so we pass the entire line to be parsed since it would contain all the documents related to that word.
+                    else:
+                        if found_target_block:
+                            string_to_parse = line
+                        else:
                             continue
+                    
+                    #Here we added another safety check so that we make sure the word id in the current iteration matches our required word id
+                    if current_word_id == word_ID: 
+                        #Take the indiviual docuemnts in the line which are separated with columns . Name them as entries because each entry contains both the document name and the frequency against that. We also need to separate the frequency for page rank logic afterwards.
+                        entries = [e.strip() for e in string_to_parse.split(",")] 
 
-                        #Now if we split from the right side till the first space occurs we get the frequecny of that word in each document and store both parts in document data variable 
-                        document_data = entry.rsplit(" " , 1)
+                        #Iterate over the entries remove extra spaces 
+                        for entry in entries:
+                            entry = entry.strip()
+                            if not entry : 
+                                continue
 
-                        #If the number of parts is not 2 it means frequency not found so we simply continue to prevent crash and bad results
-                        if len(document_data) != 2 :
-                            continue
+                            #Now if we split from the right side till the first space occurs we get the frequecny of that word in each document and store both parts in document data variable 
+                            document_data = entry.rsplit(" " , 1)
 
-                        #Otherwise store the first part as the document id 
-                        document_ID = document_data[0]
-                        
-                        #We are enclosing the frequecny logic in try block it is possible that the second part we got might not be a number so this is exceptional case and would cause program to crash and abort apruptly due to datatype mismatch
-                        try:
-                            #Storing the second part as frequency by storing it in the the form of int from string
-                            frequency = int(document_data[1])
-                            #Now map the document ID and frequency in our dictionary 
-                            documet_frequency_map[document_ID] = frequency
-                        except ValueError:
-                            continue
-        
-        #At the end of the function simply return the dictionary 
+                            #If the number of parts is not 2 it means frequency not found so we simply continue to prevent crash and bad results
+                            if len(document_data) != 2 :
+                                continue
+
+                            #Otherwise store the first part as the document id 
+                            document_ID = document_data[0]
+                            
+                            #We are enclosing the frequecny logic in try block it is possible that the second part we got might not be a number so this is exceptional case and would cause program to crash and abort apruptly due to datatype mismatch
+                            try:
+                                #Storing the second part as frequency by storing it in the the form of int from string
+                                frequency = int(document_data[1])
+                                #Now map the document ID and frequency in our dictionary 
+                                documet_frequency_map[document_ID] = frequency
+                            except ValueError:
+                                continue
+
+        with self.lock:
+            #If word ID is not in any of the barrels then check for the new documents added in the ram they might be there 
+            if word_ID in self.dynamic_index:
+                for doc_id, freq in self.dynamic_index[word_ID].items():
+                    if doc_id in documet_frequency_map:
+                        documet_frequency_map[doc_id] += freq
+                    else:
+                        documet_frequency_map[doc_id] = freq
+
+            # Or they may be in the documents that are currently being saved to the disk 
+            if word_ID in self.flushing_index:
+                for doc_id, freq in self.flushing_index[word_ID].items():
+                    if doc_id in documet_frequency_map:
+                        documet_frequency_map[doc_id] += freq
+                    else:
+                        documet_frequency_map[doc_id] = freq
+
         return documet_frequency_map
-    
+        
 
     #Helper function for semantic search . It basically looks for the top related words semantically and expnads the query by also returning results for the semantically suggested words.
     def expand_query_with_semantics(self , word):
@@ -333,6 +429,100 @@ class SearchEngine:
             final_suggestions.append(full_phrase)
             
         return final_suggestions
+    
+    def save_state_to_disk(self):
+        print("Saving state to disk...")
+
+        # We would first move the data into the transit buffer so that the gap between the search and the data flush to the hard drive from main memory does not effect the search results 
+        with self.lock:
+            if not self.dynamic_index: 
+                return # Nothing to save so simply return
+            
+            # Move data to flushing_index so dynamic_index is free for new adds and we do that so search gap does not exist 
+            # We assume flushing_index is empty because previous save finished
+            self.flushing_index = self.dynamic_index
+            self.dynamic_index = {} 
+        
+        # Save the changes to the lexicon 
+        try:
+            with open("lexicon.txt", "w", encoding="utf-8") as f:
+                sorted_lexicon = sorted(self.lexicon.items(), key=lambda item: item[1])
+                for word, word_id in sorted_lexicon:
+                    f.write(f"{word_id} : {word}\n")
+        except Exception as e:
+            print(f"Error saving lexicon: {e}")
+
+        # Save changes to the barrels 
+        # Iterate through our "Transit Buffer" (flushing_index). We use flushing_index because dynamic_index is already back in use by new users. 
+
+        #We do not want to open a single file multiple times so we group the changes by their barrel ID's 
+        updates_by_barrel = {} 
+        #Iterate over the flushing index
+        for word_id, doc_data in self.flushing_index.items():
+            barrel_id = word_id % 10
+            if barrel_id not in updates_by_barrel:
+                #If this is the first word for this barrel, initialize a sub-dictionary.
+                updates_by_barrel[barrel_id] = {}
+            #Store data in the correct barrel group 
+            updates_by_barrel[barrel_id][word_id] = doc_data
+
+        #For each group open the respective barrel files and make the insertions 
+        for barrel_id, new_data in updates_by_barrel.items():
+            filename = f"barrels/barrel_{barrel_id}.txt"
+            
+
+            # Read existing barrel to merge the new changes / new documents added 
+            current_data = {}
+            if os.path.exists(filename):
+                try:
+                    with open(filename, "r", encoding="utf-8") as f:
+                        current_word_id = -1  
+                        
+                        for line in f:
+                            line = line.strip()
+                            if not line: continue
+
+                            parts = line.split(" : ", 1)
+
+                            # Check for Start of Block 
+                            if len(parts) == 2 and parts[0].isdigit():
+                                current_word_id = int(parts[0])
+                                # Instead of parsing inner commas, we store the WHOLE string
+                                # because we just want to save it back later.
+                                current_data[current_word_id] = parts[1]
+
+                            # Check for the continuation Line
+                            else:
+                                if current_word_id != -1:
+                                    # Append this continuation line to the existing data
+                                    # We add a comma to ensure valid formatting
+                                    current_data[current_word_id] += ", " + line
+                                    
+                except Exception as e: 
+                     print(f"Error reading barrel {barrel_id}: {e}")
+
+            # Merge
+            for word_id, docs_map in new_data.items():
+                new_str = ", ".join([f"{d} {f}" for d, f in docs_map.items()])
+                if word_id in current_data:
+                    current_data[word_id] += ", " + new_str
+                else:
+                    current_data[word_id] = new_str
+
+            # Write
+            try:
+                with open(filename, "w", encoding="utf-8") as f:
+                    for wid in sorted(current_data.keys()):
+                        f.write(f"{wid} : {current_data[wid]}\n")
+            except Exception as e:
+                print(f"Error writing barrel {barrel_id}: {e}")
+        
+
+        # Now that it's safely on disk, we can remove it from RAM check
+        with self.lock:
+            self.flushing_index = {}
+            
+        print("Save Complete. RAM buffer cleared.")
 
 #Temporary testing logic in the CLI for search suggestions actual implementation in the web page 
 if __name__ == "__main__":
