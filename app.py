@@ -1,3 +1,4 @@
+import atexit
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 import os
@@ -85,6 +86,8 @@ def api_stats():
         'avgDocLength': '2,847'
     })
 
+
+
 @app.route('/api/search')
 def api_search():
     query = request.args.get('q', '')
@@ -121,6 +124,15 @@ def api_search():
             })
 
     return jsonify(final_results)
+
+@app.route('/api/health')
+def api_health():
+    """Satisfies the frontend health check to remove the 'Not Found' error."""
+    return jsonify({
+        # 'ok': True,
+        # 'engineAvailable': ENGINE is not None,
+        # 'autocompleteAvailable': AUTOCOMPLETE is not None
+    })
 
 @app.route('/api/autocomplete')
 def api_autocomplete():

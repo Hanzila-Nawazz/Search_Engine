@@ -363,5 +363,106 @@ export const UI = {
         document.addEventListener('click', (e) => {
             if (!elements.searchWrapper.contains(e.target)) container.classList.add('hidden');
         });
+    },
+
+    showAddDocumentModal(onSave) {
+        // 1. Create overlay container
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay fade-in-overlay';
+
+        // 2. Define the modal HTML structure matching the design
+        overlay.innerHTML = `
+            <div class="modal-container scale-up-modal">
+                <div class="modal-header">
+                    <h3 class="modal-title">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 5V19M5 12H19" stroke="#14b8a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Add New Document
+                    </h3>
+                    <button class="modal-close-btn">&times;</button>
+                </div>
+                
+                <div class="modal-body scrollable-content">
+                    <form id="add-doc-form">
+                        <div class="form-group">
+                            <label for="doc-title">Title *</label>
+                            <input type="text" id="doc-title" name="title" placeholder="Document title" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="doc-abstract">Abstract *</label>
+                            <textarea id="doc-abstract" name="abstract" rows="5" placeholder="Document abstract or description" required></textarea>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="doc-id">Publication Number</label>
+                                <input type="text" id="doc-id" name="id" placeholder="e.g., US-2024-001234" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="doc-date">Publication Date</label>
+                                <input type="date" id="doc-date" name="publicationDate" style="color-scheme: dark;">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="doc-assignees">Assignees</label>
+                            <input type="text" id="doc-assignees" name="assignees" placeholder="Comma-separated assignees">
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="doc-cpc">CPC Code</label>
+                                <input type="text" id="doc-cpc" name="cpc" placeholder="e.g., G06F16/00">
+                            </div>
+                            <div class="form-group">
+                                <label for="doc-ipc">IPC Code</label>
+                                <input type="text" id="doc-ipc" name="ipc" placeholder="e.g., G06F 16/00">
+                            </div>
+                        </div>
+
+                         <div class="form-group" style="margin-bottom: 0;">
+                            <label for="doc-keywords">Keywords</label>
+                            <input type="text" id="doc-keywords" name="keywords" placeholder="Comma-separated keywords">
+                        </div>
+                    </form>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-modal-cancel" id="modal-cancel-btn">Cancel</button>
+                    <button type="submit" form="add-doc-form" class="btn-modal-add">Add Document</button>
+                </div>
+            </div>
+        `;
+
+        // 3. Append to body
+        document.body.appendChild(overlay);
+        // Prevent background scrolling while modal is open
+        document.body.style.overflow = 'hidden';
+
+        // 4. Event Handlers
+        const close = () => {
+            document.body.removeChild(overlay);
+            document.body.style.overflow = ''; // Restore scrolling
+        };
+
+        overlay.querySelector('.modal-close-btn').onclick = close;
+        overlay.querySelector('#modal-cancel-btn').onclick = close;
+        
+        // Close on clicking outside the modal container
+        overlay.onclick = (e) => {
+            if (e.target === overlay) close();
+        };
+
+        overlay.querySelector('#add-doc-form').onsubmit = (e) => {
+            e.preventDefault();
+            // Gather form data into an object
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            onSave(data, close);
+        };
     }
+
+    
 };

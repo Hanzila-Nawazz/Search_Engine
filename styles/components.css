@@ -318,6 +318,186 @@
     animation: autoSlideDown 0.2s ease-out;
 }
 
+/* --- Modern Add Document Modal Styles --- */
+
+/* Overlay background */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(0, 0, 0, 0.75); /* Dark dimmed background */
+    backdrop-filter: blur(3px); /* Subtle glass effect */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 1rem;
+}
+
+/* The main modal box */
+.modal-container {
+    background-color: #1a1d23; /* Dark card background matching reference */
+    width: 100%;
+    max-width: 600px; /* Matches the width in images */
+    max-height: 90vh; /* Prevent overflow on small screens */
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Header section */
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.modal-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.modal-close-btn {
+    background: none;
+    border: none;
+    color: #9ca3af;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.modal-close-btn:hover {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Scrollable form body */
+.modal-body {
+    padding: 1.5rem;
+    overflow-y: auto; /* Allows scrolling if form is tall */
+}
+
+/* Form elements */
+.form-group {
+    margin-bottom: 1.25rem;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #9ca3af; /* Muted text color */
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    background-color: #111418; /* Darker input background matching reference */
+    border: 1px solid #2d3748;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+    color: #ffffff;
+    outline: none;
+    transition: border-color 0.2s;
+    font-family: inherit;
+}
+
+.form-group textarea {
+    resize: vertical;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    border-color: #14b8a6; /* Teal focus border */
+}
+
+/* Input placeholder color */
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+    color: #4b5563;
+}
+
+/* Footer section */
+.modal-footer {
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    background-color: #1a1d23;
+}
+
+/* Buttons */
+.btn-modal-cancel,
+.btn-modal-add {
+    padding: 0.6rem 1.25rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-modal-cancel {
+    background-color: transparent;
+    border: 1px solid #2d3748;
+    color: #ffffff;
+}
+
+.btn-modal-cancel:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.btn-modal-add {
+    background-color: #14b8a6; /* Teal primary color matching reference */
+    border: none;
+    color: #000000; /* Dark text on teal button */
+    font-weight: 600;
+}
+
+.btn-modal-add:hover {
+    background-color: #0d9488; /* Slightly darker teal on hover */
+}
+
+/* Animations */
+.fade-in-overlay {
+    animation: fadeIn 0.2s ease-out;
+}
+
+.scale-up-modal {
+    animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes scaleUp {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
 @keyframes autoSlideDown {
     from { opacity: 0; transform: translateY(-10px); }
     to { opacity: 1; transform: translateY(0); }
