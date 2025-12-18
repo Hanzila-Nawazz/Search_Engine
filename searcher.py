@@ -5,6 +5,11 @@ import gensim
 #Operating system for file existance checks 
 import os
 #We have enclosed all of our logic inside OOP structure because we need huge data structures to be loaded in the ram like our semantic model , lexicon file. We need it to be loaded only once when the search engine starts.Thats why we have used OOP architecture for this purpose.
+
+from autoComplete import AutoCompleteSystem
+
+import msvcrt 
+
 class SearchEngine:
     #The initializer which runs automatically when the instance of the object is created. Inside this we are loading our lexicon and our semantic model in our RAM for faster access and results.
     def __init__(self):
@@ -13,6 +18,7 @@ class SearchEngine:
         self.lexicon = self.__load_lexicon()
         print("Loading the semantic model...")
         self.model = self.__load_semantic_model()
+        self.autocomplete = AutoCompleteSystem()
         print("Search Engine is Ready! Enter your query")
     
     #Load lexicon function . Simply checks for lexicon file to be exist in our directory. If exists simply load lexicon into a dictionary in which word ID's are mapped against the words. It returns a dictionary which is stored in RAM.
@@ -245,6 +251,7 @@ class SearchEngine:
 
             for document_id ,_ ,  score in ranking_data:
                 percentage = (score/max_score) * 100
+                percentage = min(percentage , 100.0)
                 final_results.append((document_id , percentage))
 
         return final_results
@@ -273,13 +280,69 @@ class SearchEngine:
                 print(f"#{i+1:<4} | {document_id:<15} | {score:.1f}%")
             print("-" * 40)
 
+    #Temporary function import for testing in CLI 
+    def get_autocomplete_suggestions(self, full_query):
+     
+        #Handle empty input
+        if not full_query: return []
 
-if __name__ == "__main__":
-    instance1 = SearchEngine()
+        #Split the query to find the last word being typed
+
+        parts = full_query.split(" ")
+        
+        #The word currently being typed
+        last_word_prefix = parts[-1]
+        
+       
+        prefix_context = " ".join(parts[:-1])
+        if prefix_context: 
+            prefix_context += " "
+
+        if not last_word_prefix:
+            return [] 
+            
+        suggestions = self.autocomplete.search(last_word_prefix)
+        
+        final_suggestions = []
+        for word in suggestions:
     
+            full_phrase = prefix_context + word
+            final_suggestions.append(full_phrase)
+            
+        return final_suggestions
+
+#Temporary testing logic in the CLI for search suggestions actual implementation in the web page 
+if __name__ == "__main__":
+    engine = SearchEngine()
+    
+    print("REAL-TIME SEARCH (Type below). Press ENTER to search, ESC to exit.")
+    current_query = ""
+
     while True:
-        query_string = input("Enter a string to search: ")
-        if query_string.lower() == "exit":
+        os.system('cls') # Clear screen
+        print(f"SEARCH > {current_query}")
+        print("-" * 30)
+
+       
+        if current_query:
+            suggestions = engine.get_autocomplete_suggestions(current_query)
+            for i, word in enumerate(suggestions):
+                print(f"   {i+1}. {word}")
+        
+       
+        key = msvcrt.getch()
+
+        if key == b'\r': # Enter
+            print("\nSearching...")
+            engine.search(current_query)
+            input("\nPress Enter to continue...")
+            current_query = ""
+        elif key == b'\x08': # Backspace
+            current_query = current_query[:-1]
+        elif key == b'\x1b': # ESC
             break
-        instance1.search(query_string)
+        else:
+            try:
+                current_query += key.decode('utf-8')
+            except: pass
 
