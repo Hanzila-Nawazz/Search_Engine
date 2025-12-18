@@ -188,9 +188,14 @@ class SearchEngine:
         EXACT_WEIGHT = 1.0
         SUGGESTIONS_WEIGHT = 0.4
 
+        #Total number of query tokens (used later for coverage based scoring)
+        total_query_tokens = len(tokens)
+
+        import math  #IMPROVEMENT: required for log based frequency scaling
+
         #For each token in our query
         for token in tokens:
-            #Get the word if from the lexicon which is loaded in our ram
+            #Get the word id from the lexicon which is loaded in our ram
             word_ID = self.__get_word_id_from_lexicon(token)
             #If a valid word ID is returnd check for the barrel lookup
             if word_ID is not None:
@@ -206,8 +211,12 @@ class SearchEngine:
                         #In the second dictionary which contains the words matched set (so that it stores unique words) from the query against the document ID we create a set against each document
                         document_token_matches[document_id] = set()
 
-                    #We add the score for each document we simply multiply the weight with the frequency and add the tokens which are found in the document in the set. The main reason for doing this is to rank the documents conatining max words of th query to the top since we are using or logic means if no document contains all the words of the query other documents would be returnd rather than no results which is a bad experience . Now the issue in the situation was that the document conataing even a single word out of multiple words query having high freq are ranked to top. However the documents containing max matched words should be ranked to top so that we use this logic.
-                    final_scores[document_id] += (int(frequency) * EXACT_WEIGHT)
+                    #Using log scaled frequency instead of raw frequency to avoid domination of high frequency terms
+                    scaled_frequency = math.log(1 + int(frequency))
+
+                    #We add the score for each document
+                    final_scores[document_id] += (scaled_frequency * EXACT_WEIGHT)
+
                     #We also add the tokens found in the list against the document
                     document_token_matches[document_id].add(token)
 
@@ -227,31 +236,45 @@ class SearchEngine:
                             final_scores[suggested_document_id] = 0.0
                             document_token_matches[suggested_document_id] = set()
 
-                        final_scores[suggested_document_id] += (int(frequency) * score * SUGGESTIONS_WEIGHT)
+                        #Log scaled frequency for semantic matches as well
+                        scaled_frequency = math.log(1 + int(frequency))
+
+                        final_scores[suggested_document_id] += (scaled_frequency * score * SUGGESTIONS_WEIGHT)
                         document_token_matches[suggested_document_id].add(token)
 
-        #This logic ranks the documents first based upon the number of matched keywords from the query and then the frequecy score . For that purpose we have a list named ranking data. This list contains tuples as entries and each tuple has three entries document id , number of words matched and the socre of each document
+        #This logic ranks the documents first based upon the number of matched keywords from the query and then the frequecy score .
         ranking_data = []
         for document_id , score in final_scores.items():
             words_matched = len(document_token_matches[document_id])
-            ranking_data.append((document_id , words_matched , score))
 
-        #This is the line which sorts the list . Thats also a reason for a list rather than dictionary. List is easy and better and efficient to sort.
+            # Keyword coverage factor (documents matching more query tokens are rewarded)
+            coverage_factor = words_matched / total_query_tokens
+
+            #Adjusting the score using coverage factor
+            adjusted_score = score * coverage_factor
+
+            ranking_data.append((document_id , words_matched , adjusted_score))
+
         #We sort the data first based on number of matchd keywords and then the score and reverse means in descending order 
         ranking_data.sort(key= lambda x: (x[1] , x[2]) , reverse=True)
 
         #This is the final result list which we would be returning.
         final_results = []
 
-        #This is the normalizing logic. We give scor to each document on the sclae of 0-100 the max score is termed as 100 and rest based on the max score
+        #Better normalization using min-max scaling instead of max only
         if ranking_data:
-            max_score = ranking_data[0][2]
+            
+            scores = [item[2] for item in ranking_data]
+            min_score = min(scores)
+            max_score = max(scores)
 
-            if max_score == 0 : max_score = 1
+            score_range = max_score - min_score
+            if score_range == 0:
+                score_range = 1
 
-            for document_id ,_ ,  score in ranking_data:
-                percentage = (score/max_score) * 100
-                percentage = min(percentage , 100.0)
+            for document_id , _ , score in ranking_data:
+                percentage = ((score - min_score) / score_range) * 100
+                percentage = min(max(percentage , 0.0) , 100.0)
                 final_results.append((document_id , percentage))
 
         return final_results
