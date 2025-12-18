@@ -1,0 +1,131 @@
+:root {
+    /* Colors */
+    --bg-dark: #0f1115;
+    --bg-card: #14171c; /* Slightly lighter for cards */
+    --bg-card-hover: #1c2026;
+    --text-main: #ffffff;
+    --text-muted: #94a3b8;
+    --primary: #14b8a6; /* Teal */
+    --primary-hover: #0d9488;
+    --primary-dim: rgba(20, 184, 166, 0.1);
+    --border-color: #2d3748;
+    --accent-blue: #3b82f6;
+
+    /* Spacing */
+    --spacing-xs: 0.5rem;
+    --spacing-sm: 0.75rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    --spacing-2xl: 4rem;
+
+    /* Layout */
+    --max-width: 1200px;
+    --header-height: 70px;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Utilities */
+.container {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 0 var(--spacing-md);
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Header */
+.app-header {
+    height: var(--header-height);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--spacing-xl);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    color: var(--primary);
+}
+
+.logo-text {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-main);
+    letter-spacing: -0.02em;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+/* Main Layout */
+main {
+    padding-top: var(--spacing-2xl);
+    min-height: calc(100vh - var(--header-height));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Hero Section */
+.hero-section {
+    text-align: center;
+    max-width: 800px;
+    margin-bottom: var(--spacing-2xl);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    animation: fadeIn 0.8s ease-out;
+}
+
+.hero-title {
+    font-size: 3.5rem;
+    font-weight: 700;
+    margin-bottom: var(--spacing-md);
+    letter-spacing: -0.03em;
+}
+
+.highlight-text {
+    color: var(--accent-blue);
+}
+
+.hero-subtitle {
+    color: var(--text-muted);
+    font-size: 1.125rem;
+    max-width: 600px;
+    margin-bottom: var(--spacing-2xl);
+    line-height: 1.6;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
