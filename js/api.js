@@ -51,5 +51,9 @@ export const API = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(doc)
         });
+    },
+
+    async getPatentDetail(patentId) {
+        return _fetchJson(`${API_BASE_URL}/patent/${encodeURIComponent(patentId)}`);
     }
 };

@@ -295,14 +295,20 @@ export const UI = {
 
         results.forEach((res, index) => {
             const card = document.createElement('article');
-            card.className = 'modern-patent-card fade-in';
+            card.className = 'modern-patent-card fade-in clickable-card';
             card.style.animationDelay = `${index * 0.08}s`;
 
-            // Build tags from CPC codes (split by comma, take first few)
-            const cpcCodes = (res.cpc || '').split(',').map(c => c.trim()).filter(c => c && c !== 'N/A').slice(0, 4);
-            const tagsHtml = cpcCodes.length > 0
-                ? cpcCodes.map(tag => `<span class="tag">${tag}</span>`).join('')
-                : '<span class="tag">Patent</span>';
+            // Build tags from CPC codes (first 4 only)
+            const cpcCodes = (res.cpc || '').split(',').map(c => c.trim()).filter(c => c && c !== 'N/A');
+            const displayTags = cpcCodes.slice(0, 4);
+            const tagsHtml = displayTags.length > 0
+                ? displayTags.map(tag => `<span class="tag">${tag}</span>`).join('') + (cpcCodes.length > 4 ? `<span class="tag tag-more">+${cpcCodes.length - 4} more</span>` : '')
+                : '<span class="tag">patent</span>';
+
+            // Truncate CPC/IPC for card display
+            const cpcShort = cpcCodes.slice(0, 3).join(', ') + (cpcCodes.length > 3 ? ` (+${cpcCodes.length - 3})` : '') || 'N/A';
+            const ipcCodes = (res.ipc || '').split(',').map(c => c.trim()).filter(c => c && c !== 'N/A');
+            const ipcShort = ipcCodes.slice(0, 3).join(', ') + (ipcCodes.length > 3 ? ` (+${ipcCodes.length - 3})` : '') || 'N/A';
 
             card.innerHTML = `
                 <div class="card-header">
@@ -319,17 +325,11 @@ export const UI = {
                     </div>
                     <div class="meta-item">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                        <span>${res.assignees || 'N/A'}</span>
+                        <span class="meta-truncate">${res.assignees || 'N/A'}</span>
                     </div>
                     <div class="meta-item">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
                         <span>${res.date || 'N/A'}</span>
-                    </div>
-                    <div class="meta-item">
-                        <span><strong>CPC:</strong> ${res.cpc || 'N/A'}</span>
-                    </div>
-                    <div class="meta-item">
-                        <span><strong>IPC:</strong> ${res.ipc || 'N/A'}</span>
                     </div>
                 </div>
 
@@ -337,8 +337,123 @@ export const UI = {
                     ${tagsHtml}
                 </div>
             `;
+
+            // Store full result data for the detail popup
+            card._patentData = res;
+
+            // Click to open detail popup
+            card.addEventListener('click', () => {
+                this.showPatentDetail(res);
+            });
+
             elements.resultsArea.appendChild(card);
         });
+    },
+
+    showPatentDetail(result) {
+        // Fetch full abstract from the API (the search result only has a snippet)
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay fade-in-overlay';
+        overlay.innerHTML = `
+            <div class="modal-container patent-detail-modal scale-up-modal">
+                <div class="modal-header">
+                    <h3 class="modal-title">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#14b8a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                        Patent Details
+                    </h3>
+                    <button class="modal-close-btn">&times;</button>
+                </div>
+                <div class="modal-body patent-detail-body">
+                    <div class="detail-loading">Loading full details...</div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        document.body.style.overflow = 'hidden';
+
+        const close = () => {
+            document.body.removeChild(overlay);
+            document.body.style.overflow = '';
+        };
+
+        overlay.querySelector('.modal-close-btn').onclick = close;
+        overlay.onclick = (e) => { if (e.target === overlay) close(); };
+
+        // Fetch full patent data
+        fetch(`/api/patent/${encodeURIComponent(result.id)}`)
+            .then(r => r.json())
+            .then(patent => {
+                if (patent.error) {
+                    this._renderDetailContent(overlay, result, result.snippet);
+                } else {
+                    this._renderDetailContent(overlay, patent, patent.abstract);
+                }
+            })
+            .catch(() => {
+                this._renderDetailContent(overlay, result, result.snippet);
+            });
+    },
+
+    _renderDetailContent(overlay, data, fullAbstract) {
+        const body = overlay.querySelector('.patent-detail-body');
+
+        const cpcCodes = (data.cpc || '').split(',').map(c => c.trim()).filter(c => c && c !== 'N/A');
+        const ipcCodes = (data.ipc || '').split(',').map(c => c.trim()).filter(c => c && c !== 'N/A');
+
+        const cpcTagsHtml = cpcCodes.length > 0
+            ? cpcCodes.map(c => `<span class="tag">${c}</span>`).join('')
+            : '<span class="detail-na">N/A</span>';
+        const ipcTagsHtml = ipcCodes.length > 0
+            ? ipcCodes.map(c => `<span class="tag">${c}</span>`).join('')
+            : '<span class="detail-na">N/A</span>';
+
+        body.innerHTML = `
+            <div class="detail-section">
+                <div class="detail-title-row">
+                    <h2 class="detail-title">${data.title || 'Untitled Patent'}</h2>
+                    ${data.score ? `<div class="relevance-score">${Number(data.score).toFixed(1)}</div>` : ''}
+                </div>
+                <span class="detail-pub-id">${data.id}</span>
+            </div>
+
+            <div class="detail-section">
+                <h4 class="detail-section-heading">Abstract</h4>
+                <p class="detail-abstract">${fullAbstract || 'No abstract available.'}</p>
+            </div>
+
+            <div class="detail-section">
+                <h4 class="detail-section-heading">Patent Information</h4>
+                <div class="detail-grid">
+                    <div class="detail-field">
+                        <span class="detail-label">Assignees</span>
+                        <span class="detail-value">${data.assignees || 'N/A'}</span>
+                    </div>
+                    <div class="detail-field">
+                        <span class="detail-label">Inventors</span>
+                        <span class="detail-value">${data.inventors || 'N/A'}</span>
+                    </div>
+                    <div class="detail-field">
+                        <span class="detail-label">Publication Date</span>
+                        <span class="detail-value">${data.publication_date || data.date || 'N/A'}</span>
+                    </div>
+                    <div class="detail-field">
+                        <span class="detail-label">Filing Date</span>
+                        <span class="detail-value">${data.filing_date || 'N/A'}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <h4 class="detail-section-heading">CPC Codes</h4>
+                <div class="detail-tags-wrap">${cpcTagsHtml}</div>
+            </div>
+
+            <div class="detail-section">
+                <h4 class="detail-section-heading">IPC Codes</h4>
+                <div class="detail-tags-wrap">${ipcTagsHtml}</div>
+            </div>
+        `;
     },
 
     initAutocomplete(apiFn) {

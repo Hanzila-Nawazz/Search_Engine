@@ -193,6 +193,24 @@ def api_search():
 
     return jsonify(final_results)
 
+@app.route('/api/patent/<path:patent_id>')
+def api_patent_detail(patent_id):
+    """Returns full metadata for a single patent (used by the detail popup)."""
+    meta = PATENT_METADATA.get(patent_id)
+    if not meta:
+        return jsonify({"error": "Patent not found"}), 404
+    return jsonify({
+        'id': patent_id,
+        'title': meta.get('title', 'N/A'),
+        'abstract': meta.get('abstract', 'No abstract available.'),
+        'assignees': meta.get('assignees', 'Unknown'),
+        'inventors': meta.get('inventors', 'N/A'),
+        'cpc': meta.get('cpc_codes', 'N/A'),
+        'ipc': meta.get('ipc_codes', 'N/A'),
+        'publication_date': meta.get('publication_date', 'N/A'),
+        'filing_date': meta.get('filing_date', 'N/A'),
+    })
+
 @app.route('/api/health')
 def api_health():
     """Simple health check without extra messages."""
@@ -245,8 +263,25 @@ def upload_endpoint():
     if not doc_id or not title:
         return jsonify({"status": "error", "message": "Missing ID or Title"}), 400
 
-    # Update the in-memory metadata dict immediately so the doc shows up
-    # in search results with full metadata right away
+    # 1. PERSIST TO CSV SYNCHRONOUSLY — guaranteed to complete before response
+    #    This ensures the doc metadata survives server restarts.
+    try:
+        with open(CSV_PATH, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                doc_id, title, abstract,
+                'N/A',                        # filing_date
+                pub_date or 'N/A',            # publication_date
+                cpc or 'N/A',                 # cpc_codes
+                ipc or 'N/A',                 # ipc_codes
+                'N/A',                        # inventors
+                assignees or 'Unknown'        # assignees
+            ])
+    except Exception as e:
+        print(f"Error appending to CSV: {e}")
+        return jsonify({"status": "error", "message": f"Failed to save: {e}"}), 500
+
+    # 2. UPDATE IN-MEMORY METADATA — so the doc shows up with full details immediately
     PATENT_METADATA[doc_id] = {
         'title': title,
         'abstract': abstract,
@@ -258,7 +293,7 @@ def upload_endpoint():
         'assignees': assignees or 'Unknown',
     }
 
-    # Run indexing in background thread so the API responds instantly
+    # 3. INDEX IN BACKGROUND — adds to dynamic_index for immediate search
     def worker():
         ENGINE.add_document(
             doc_id, title, abstract,
@@ -271,7 +306,7 @@ def upload_endpoint():
     thread = threading.Thread(target=worker)
     thread.start()
     
-    return jsonify({"status": "success", "message": f"Document '{doc_id}' indexing started."})
+    return jsonify({"status": "success", "message": f"Document '{doc_id}' indexed successfully."})
 
 # --- Static File Serving ---
 
