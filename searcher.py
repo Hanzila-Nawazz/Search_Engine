@@ -87,45 +87,16 @@ class SearchEngine:
 
     def add_document(self , document_id , title , abstract , filing_date = "Not Available", publication_date = "Not Available" , cpc_codes = "Unassigned", ipc_codes = "Unassigned" , inventors = "Unknown", asisgnees = "Unknown"):
 
-        try:
-            with open("patents_dataset.csv" , 'a' , newline='' , encoding='utf-8') as f:
-                writer = csv.writer(f)
-                writer.writerow([document_id , title , abstract , filing_date , publication_date , cpc_codes , ipc_codes , inventors , asisgnees])
-
-                file_content = (
-                f"[PUBLICATION_NUMBER]\n{document_id}\n\n"
-                f"[TITLE]\n{title}\n\n"
-                f"[ABSTRACT]\n{abstract}\n\n"
-                f"[FILING_DATE]\n{filing_date}\n\n"
-                f"[PUBLICATION_DATE]\n{publication_date}\n\n"
-                f"[CPC_CODES]\n{cpc_codes}\n\n"
-                f"[IPC_CODES]\n{ipc_codes}\n\n"
-                f"[INVENTORS]\n{inventors}\n\n"
-                f"[ASSIGNEES]\n{asisgnees}\n\n"
-                )
-
-
-                txt_path = os.path.join("patent_docs" , f"{document_id}.txt")
-                with open(txt_path , 'w' , encoding='utf-8') as f:
-                    f.write(file_content)
-
-        except Exception as e:
-            print(f"Error writing to disk: {e}")
-            return False
-        
-        
+        # 1. IN-MEMORY INDEXING FIRST — this makes the document searchable immediately
         with self.lock: 
-            
 
             full_text = f"{title} {abstract}"
             tokens = clean_and_tokenize_text(full_text)
-            
             
             word_frequencies = {}
             for token in tokens:
                 word_frequencies[token] = word_frequencies.get(token, 0) + 1
 
-            
             for word, freq in word_frequencies.items():
                 if word not in self.lexicon:
                     self.max_word_id += 1
@@ -138,7 +109,38 @@ class SearchEngine:
                 
                 self.dynamic_index[word_id][document_id] = freq
 
-        
+        # 2. DISK PERSISTENCE — append to CSV and write .txt file (non-blocking on failure)
+        try:
+            with open("patents_dataset.csv" , 'a' , newline='' , encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow([document_id , title , abstract , filing_date , publication_date , cpc_codes , ipc_codes , inventors , asisgnees])
+        except Exception as e:
+            print(f"Error appending to CSV: {e}")
+
+        try:
+            txt_dir = "patent_docs"
+            if not os.path.exists(txt_dir):
+                os.makedirs(txt_dir)
+
+            file_content = (
+            f"[PUBLICATION_NUMBER]\n{document_id}\n\n"
+            f"[TITLE]\n{title}\n\n"
+            f"[ABSTRACT]\n{abstract}\n\n"
+            f"[FILING_DATE]\n{filing_date}\n\n"
+            f"[PUBLICATION_DATE]\n{publication_date}\n\n"
+            f"[CPC_CODES]\n{cpc_codes}\n\n"
+            f"[IPC_CODES]\n{ipc_codes}\n\n"
+            f"[INVENTORS]\n{inventors}\n\n"
+            f"[ASSIGNEES]\n{asisgnees}\n\n"
+            )
+
+            txt_path = os.path.join(txt_dir , f"{document_id}.txt")
+            with open(txt_path , 'w' , encoding='utf-8') as f:
+                f.write(file_content)
+        except Exception as e:
+            print(f"Error writing .txt file: {e}")
+
+        # 3. AUTO-FLUSH to barrels when buffer is full
         PENDING_LIMIT = 50
         if len(self.dynamic_index) >= PENDING_LIMIT:
             print("RAM buffer full. Flushing to disk in background...")

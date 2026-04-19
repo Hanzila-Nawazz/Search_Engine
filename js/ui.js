@@ -282,18 +282,35 @@ export const UI = {
             return;
         }
 
+        // Results summary bar
+        const summary = document.createElement('div');
+        summary.className = 'results-summary fade-in';
+        summary.innerHTML = `
+            <div class="summary-left">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                <span><strong>${results.length}</strong> Documents Found</span>
+            </div>
+        `;
+        elements.resultsArea.appendChild(summary);
+
         results.forEach((res, index) => {
             const card = document.createElement('article');
             card.className = 'modern-patent-card fade-in';
             card.style.animationDelay = `${index * 0.08}s`;
 
+            // Build tags from CPC codes (split by comma, take first few)
+            const cpcCodes = (res.cpc || '').split(',').map(c => c.trim()).filter(c => c && c !== 'N/A').slice(0, 4);
+            const tagsHtml = cpcCodes.length > 0
+                ? cpcCodes.map(tag => `<span class="tag">${tag}</span>`).join('')
+                : '<span class="tag">Patent</span>';
+
             card.innerHTML = `
                 <div class="card-header">
-                    <h3 class="card-title">${res.title}</h3>
+                    <h3 class="card-title">${res.title || 'Untitled Patent'}</h3>
                     <div class="relevance-score">${res.score.toFixed(1)}</div>
                 </div>
                 
-                <p class="card-snippet">${res.snippet}</p>
+                <p class="card-snippet">${res.snippet || 'No abstract available.'}</p>
                 
                 <div class="card-metadata">
                     <div class="meta-item">
@@ -302,22 +319,22 @@ export const UI = {
                     </div>
                     <div class="meta-item">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                        <span>${res.assignee}</span>
+                        <span>${res.assignees || 'N/A'}</span>
                     </div>
                     <div class="meta-item">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                        <span>${res.date}</span>
+                        <span>${res.date || 'N/A'}</span>
                     </div>
                     <div class="meta-item">
-                        <span><strong>CPC:</strong> ${res.cpc}</span>
+                        <span><strong>CPC:</strong> ${res.cpc || 'N/A'}</span>
                     </div>
                     <div class="meta-item">
-                        <span><strong>IPC:</strong> ${res.ipc}</span>
+                        <span><strong>IPC:</strong> ${res.ipc || 'N/A'}</span>
                     </div>
                 </div>
 
                 <div class="card-tags">
-                    ${['machine learning', 'NLP', 'data structure'].map(tag => `<span class="tag">${tag}</span>`).join('')}
+                    ${tagsHtml}
                 </div>
             `;
             elements.resultsArea.appendChild(card);
@@ -462,6 +479,25 @@ export const UI = {
             const data = Object.fromEntries(formData.entries());
             onSave(data, close);
         };
+    },
+
+    showDiag(message, level = 'info') {
+        if (!elements.diagnostics) return;
+        elements.diagnostics.classList.remove('hidden');
+        elements.diagnostics.innerHTML = `<div class="diag ${level}">${message}</div>`;
+        // Auto-dismiss after 5 seconds
+        clearTimeout(this._diagTimer);
+        this._diagTimer = setTimeout(() => this.clearDiag(), 5000);
+    },
+
+    clearDiag() {
+        if (!elements.diagnostics) return;
+        elements.diagnostics.classList.add('hidden');
+        elements.diagnostics.innerHTML = '';
+    },
+
+    renderError(msg) {
+        this.showDiag(msg, 'error');
     }
 
     

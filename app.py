@@ -1,4 +1,5 @@
 import atexit
+import csv
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 import os
@@ -14,7 +15,9 @@ app = Flask(__name__)
 CORS(app)
 
 # Paths
-DATA_DIR = "patent_docs" 
+DATA_DIR = "patent_docs"
+CSV_PATH = "patents_dataset.csv"
+FORWARD_INDEX_PATH = "forward_index.txt"
 
 # Global Stats Cache
 SERVER_STATS = {
@@ -23,6 +26,42 @@ SERVER_STATS = {
     'indexedTerms': 0,
     'avgDocLength': 0
 }
+
+# In-memory metadata lookup from the CSV (keyed by publication_number)
+PATENT_METADATA = {}
+
+def load_csv_metadata():
+    """Load patent metadata from the CSV into an in-memory dictionary for fast lookup."""
+    global PATENT_METADATA
+    if not os.path.exists(CSV_PATH):
+        print(f"Warning: {CSV_PATH} not found. Document metadata will be unavailable.")
+        return
+
+    print(f"Loading patent metadata from {CSV_PATH}...")
+    count = 0
+    try:
+        with open(CSV_PATH, 'r', encoding='utf-8', errors='replace') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                pub_num = row.get('publication_number', '').strip()
+                if pub_num:
+                    PATENT_METADATA[pub_num] = {
+                        'title': row.get('title', 'N/A').strip(),
+                        'abstract': row.get('abstract', '').strip(),
+                        'filing_date': row.get('filing_date', 'N/A').strip(),
+                        'publication_date': row.get('publication_date', 'N/A').strip(),
+                        'cpc_codes': row.get('cpc_codes', 'N/A').strip(),
+                        'ipc_codes': row.get('ipc_codes', 'N/A').strip(),
+                        'inventors': row.get('inventors', 'N/A').strip(),
+                        'assignees': row.get('assignees', 'N/A').strip(),
+                    }
+                    count += 1
+        print(f"Loaded metadata for {count:,} patents.")
+    except Exception as e:
+        print(f"Error loading CSV metadata: {e}")
+
+# Load CSV metadata at startup
+load_csv_metadata()
 
 # --- Initialize Systems ---
 print("--- Loading NexaSearch Subsystems ---")
@@ -47,19 +86,24 @@ except Exception as e:
 def precalculate_stats():
     print("Pre-calculating statistics... (This happens only once)")
     try:
-        # 1. Document Count
-        if os.path.exists(DATA_DIR):
-            files = [f for f in os.listdir(DATA_DIR) if f.endswith('.txt')]
-            doc_count = len(files)
-            
-            # 2. Token Stats (Sum file sizes)
-            total_size_bytes = sum(os.path.getsize(os.path.join(DATA_DIR, f)) for f in files)
-            total_indexed_terms = total_size_bytes // 6
-            avg_doc_len = (total_indexed_terms // doc_count) if doc_count > 0 else 0
-        else:
-            doc_count = 0
-            total_indexed_terms = 0
-            avg_doc_len = 0
+        # 1. Document Count — use the loaded CSV metadata
+        doc_count = len(PATENT_METADATA)
+
+        # 2. Indexed Terms — count from forward_index.txt (each line = 1 doc, entries = word_id freq pairs)
+        total_indexed_terms = 0
+        if os.path.exists(FORWARD_INDEX_PATH):
+            with open(FORWARD_INDEX_PATH, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    # Format: DOC_ID : word_id freq, word_id freq, ...
+                    parts = line.split(' : ', 1)
+                    if len(parts) == 2:
+                        entries = parts[1].split(',')
+                        total_indexed_terms += len(entries)
+
+        avg_doc_len = (total_indexed_terms // doc_count) if doc_count > 0 else 0
 
         # 3. Lexicon Size
         lexicon_count = len(ENGINE.lexicon) if ENGINE else 0
@@ -70,7 +114,7 @@ def precalculate_stats():
         SERVER_STATS['indexedTerms'] = f"{total_indexed_terms:,}"
         SERVER_STATS['avgDocLength'] = f"{avg_doc_len:,}"
         
-        print("Stats calculation complete.")
+        print(f"Stats calculation complete: {doc_count:,} docs, {lexicon_count:,} lexicon, {total_indexed_terms:,} terms")
 
     except Exception as e:
         print(f"Stats Error: {e}")
@@ -81,41 +125,25 @@ precalculate_stats()
 
 # --- HELPER: Parse Document ---
 def _parse_document(doc_id):
-    """Extracted updated patent details for the modern UI."""
-    filename = f"{doc_id}.txt" if not str(doc_id).endswith('.txt') else doc_id
-    path = os.path.join(DATA_DIR, filename)
-
-    if not os.path.exists(path):
+    """Looks up patent metadata from the in-memory CSV dictionary."""
+    meta = PATENT_METADATA.get(doc_id)
+    if not meta:
         return None
 
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            content = f.read()
-            
-            def get_field(tag, default="N/A"):
-                match = re.search(rf"\[{tag}\]\s*([\s\S]*?)\n\n", content)
-                return match.group(1).strip() if match else default
+    abstract = meta.get('abstract', 'No abstract available.')
+    snippet = (abstract[:280] + '...') if len(abstract) > 280 else abstract
 
-            title = get_field("TITLE", f"Patent {doc_id}")
-            abstract = get_field("ABSTRACT", "No abstract available.")
-            assignees = get_field("ASSIGNEES", "Unknown Assignee")
-            cpc = get_field("CPC_CODES", "N/A")
-            ipc = get_field("IPC_CODES", "N/A")
-            date = get_field("DATE", "Dec 19, 2025")
-
-            snippet = (abstract[:280] + '...') if len(abstract) > 280 else abstract
-
-            return {
-                'id': doc_id,
-                'title': title,
-                'snippet': snippet,
-                'assignees': assignees,
-                'cpc': cpc,
-                'ipc': ipc,
-                'date': date
-            }
-    except Exception:
-        return None
+    return {
+        'id': doc_id,
+        'title': meta.get('title', f'Patent {doc_id}'),
+        'snippet': snippet,
+        'assignees': meta.get('assignees', 'Unknown'),
+        'cpc': meta.get('cpc_codes', 'N/A'),
+        'ipc': meta.get('ipc_codes', 'N/A'),
+        'date': meta.get('publication_date', 'N/A'),
+        'inventors': meta.get('inventors', 'N/A'),
+        'filing_date': meta.get('filing_date', 'N/A'),
+    }
 
 # --- API Routes ---
 
@@ -145,14 +173,22 @@ def api_search():
                 'assignees': doc_meta['assignees'],
                 'cpc':  doc_meta['cpc'],
                 'ipc':  doc_meta['ipc'],
-                'date':  doc_meta['date']
+                'date':  doc_meta['date'],
+                'inventors': doc_meta.get('inventors', 'N/A'),
+                'filing_date': doc_meta.get('filing_date', 'N/A'),
             })
         else:
             final_results.append({
                 'id': doc_id,
                 'title': f"Patent {doc_id}",
-                'snippet': "Document content file not found.",
-                'score': round(float(score), 1)
+                'snippet': "Metadata not found in dataset.",
+                'score': round(float(score), 1),
+                'assignees': 'N/A',
+                'cpc': 'N/A',
+                'ipc': 'N/A',
+                'date': 'N/A',
+                'inventors': 'N/A',
+                'filing_date': 'N/A',
             })
 
     return jsonify(final_results)
@@ -197,24 +233,45 @@ def upload_endpoint():
         return jsonify({"status": "error", "message": "Engine not loaded"}), 500
         
     data = request.json
-    doc_id = data.get('id')
-    title = data.get('title')
-    abstract = data.get('abstract')
+    doc_id = data.get('id', '').strip()
+    title = data.get('title', '').strip()
+    abstract = data.get('abstract', '').strip()
+    assignees = data.get('assignees', 'Unknown').strip()
+    cpc = data.get('cpc', 'N/A').strip()
+    ipc = data.get('ipc', 'N/A').strip()
+    pub_date = data.get('publicationDate', 'N/A').strip()
+    keywords = data.get('keywords', '').strip()
     
     if not doc_id or not title:
         return jsonify({"status": "error", "message": "Missing ID or Title"}), 400
 
-    # Run in background thread so UI doesn't freeze
+    # Update the in-memory metadata dict immediately so the doc shows up
+    # in search results with full metadata right away
+    PATENT_METADATA[doc_id] = {
+        'title': title,
+        'abstract': abstract,
+        'filing_date': 'N/A',
+        'publication_date': pub_date or 'N/A',
+        'cpc_codes': cpc or 'N/A',
+        'ipc_codes': ipc or 'N/A',
+        'inventors': 'N/A',
+        'assignees': assignees or 'Unknown',
+    }
+
+    # Run indexing in background thread so the API responds instantly
     def worker():
-        ENGINE.add_document(doc_id, title, abstract)
-        # Optional: Update stats cache after add (simple increment)
-        # In a real app, you might want to re-calculate, but incrementing is faster
-        pass 
+        ENGINE.add_document(
+            doc_id, title, abstract,
+            publication_date=pub_date or "Not Available",
+            cpc_codes=cpc or "Unassigned",
+            ipc_codes=ipc or "Unassigned",
+            asisgnees=assignees or "Unknown"
+        )
         
     thread = threading.Thread(target=worker)
     thread.start()
     
-    return jsonify({"status": "success", "message": "Indexing started..."})
+    return jsonify({"status": "success", "message": f"Document '{doc_id}' indexing started."})
 
 # --- Static File Serving ---
 

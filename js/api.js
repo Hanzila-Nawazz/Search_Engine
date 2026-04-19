@@ -46,7 +46,7 @@ export const API = {
     },
 
     async addDocument(doc) {
-        return _fetchJson(`${API_BASE_URL}/documents`, {
+        return _fetchJson(`${API_BASE_URL}/upload`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(doc)

@@ -563,3 +563,49 @@
 /* Patent card tweaks */
 .patent-card h3 { font-size: 1.05rem; }
 .patent-card .meta { font-size: 0.9rem; color: var(--text-muted); }
+
+/* --- Diagnostics Notification Bar --- */
+.diagnostics-bar {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+    min-width: 320px;
+    max-width: 600px;
+}
+
+.diag {
+    padding: 0.85rem 1.25rem;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    backdrop-filter: blur(8px);
+    animation: diagSlideUp 0.3s ease-out;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.diag.info {
+    background: rgba(20, 184, 166, 0.15);
+    border: 1px solid rgba(20, 184, 166, 0.3);
+    color: #5eead4;
+}
+
+.diag.error {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+}
+
+.diag.warning {
+    background: rgba(234, 179, 8, 0.15);
+    border: 1px solid rgba(234, 179, 8, 0.3);
+    color: #fde68a;
+}
+
+@keyframes diagSlideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
